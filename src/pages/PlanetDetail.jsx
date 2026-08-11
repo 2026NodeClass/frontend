@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { GALAXIES, PLANETS, diffStars, withAlpha } from "../data.js";
+import { diffStars, withAlpha } from "../data.js";
+import { getCatalog, getPlanet } from "../api/catalog.js";
 import PageTopBar from "../components/PageTopBar.jsx";
 import CornerBrackets from "../components/CornerBrackets.jsx";
 import Starfield from "../components/Starfield.jsx";
@@ -20,21 +21,51 @@ export default function PlanetDetail() {
   const { identity } = useIdentity();
   const { isFavorite, toggleFavorite } = useFavorites();
   const [copied, setCopied] = useState(false);
-
-  const p = useMemo(() => PLANETS.find((x) => x.id === id) || PLANETS[0], [id]);
-  const g = useMemo(() => GALAXIES.find((x) => x.id === p.galaxy), [p]);
-  const related = useMemo(
-    () => PLANETS.filter((x) => x.galaxy === p.galaxy && x.id !== p.id).slice(0, 3),
-    [p],
-  );
-
-  const isFav = isFavorite(p.id);
-  const col = g.color;
+  const [planet, setPlanet] = useState(null);
+  const [galaxy, setGalaxy] = useState(null);
+  const [related, setRelated] = useState([]);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
+    const controller = new AbortController();
+    setPlanet(null);
+    setGalaxy(null);
+    setRelated([]);
+    setLoadError("");
+
+    Promise.all([getPlanet(id, controller.signal), getCatalog(controller.signal)])
+      .then(([nextPlanet, catalog]) => {
+        setPlanet(nextPlanet);
+        setGalaxy(catalog.galaxies.find((item) => item.id === nextPlanet.galaxy) ?? null);
+        setRelated(catalog.planets.filter((item) => item.galaxy === nextPlanet.galaxy && item.id !== nextPlanet.id).slice(0, 3));
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") setLoadError("找不到或無法載入這顆行星。");
+      });
+
+    return () => controller.abort();
+  }, [id]);
+
+  const col = galaxy?.color ?? steel;
+
+  useEffect(() => {
+    if (!galaxy) return undefined;
     setGlowColor(withAlpha(col, 0.18));
     return resetGlowColor;
-  }, [col]);
+  }, [col, galaxy]);
+
+  if (loadError) {
+    return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#07080a", color: inkDim }}><Link to="/explore" style={{ color: steel }}>{loadError}　返回探索頁</Link></div>;
+  }
+
+  if (!planet || !galaxy) {
+    return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#07080a", color: inkDim }}>載入行星資料中…</div>;
+  }
+
+  const p = planet;
+  const g = galaxy;
+
+  const isFav = isFavorite(p.id);
 
   function copy() {
     try { navigator.clipboard.writeText(p.body); } catch { /* clipboard unavailable */ }
