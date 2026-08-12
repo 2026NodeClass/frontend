@@ -7,6 +7,7 @@ import PlanetDetail from "./pages/PlanetDetail.jsx";
 import AdminConsole from "./pages/AdminConsole.jsx";
 import VoyageMap from "./pages/VoyageMap.jsx";
 import CursorGlow from "./components/CursorGlow.jsx";
+import AdminTest from "./pages/AdminTest.jsx";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/planet/:id" element={<PlanetDetail />} />
         <Route path="/admin" element={<AdminConsole />} />
         <Route path="/voyage" element={<VoyageMap />} />
+        <Route path="/admintest" element={<AdminTest />} />
       </Routes>
     </>
   );
