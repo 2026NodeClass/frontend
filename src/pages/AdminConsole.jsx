@@ -1,9 +1,43 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { GALAXIES, PLANETS, withAlpha } from "../data.js";
+import { withAlpha } from "../data.js";
 import { setGlowColor, resetGlowColor } from "../components/CursorGlow.jsx";
 
-const uid = () => "x" + Math.random().toString(36).slice(2, 8);
+const API_BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:3010/api").replace(/\/$/, "");
+
+function getToken() {
+  const directToken = ["token", "accessToken", "authToken"]
+    .map((key) => localStorage.getItem(key))
+    .find(Boolean);
+
+  if (directToken) return directToken;
+
+  try {
+    const identity = JSON.parse(localStorage.getItem("stellar_identity") || "null");
+    return identity?.token ?? identity?.accessToken ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function adminRequest(path, options = {}) {
+  const token = getToken();
+  const headers = { ...options.headers };
+
+  if (options.body) headers["Content-Type"] = "application/json";
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(`${API_BASE}/admin${path}`, { ...options, headers });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const error = new Error(payload.message ?? payload.error ?? `請求失敗 (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
+
+  return payload.data;
+}
 
 const ink = "#e7e8ea";
 const inkDim = "#8f929a";
@@ -22,53 +56,130 @@ const navOff = { border: `1px solid ${line}`, background: "transparent", color: 
 const chipBase = { height: 32, padding: "0 16px", borderRadius: 2, cursor: "pointer", fontSize: 11.5, fontFamily: "'Space Mono',monospace", letterSpacing: ".06em", textTransform: "uppercase", transition: "all .15s", border: "none" };
 const typeTabBase = { flex: 1, height: 34, borderRadius: 2, cursor: "pointer", fontFamily: "'Space Mono',monospace", fontSize: 12, border: "none", letterSpacing: ".06em", textTransform: "uppercase" };
 
-export default function AdminConsole() {
+export default function AdminTest() {
   const [view, setView] = useState("galaxies");
-  const [galaxies, setGalaxies] = useState(() => GALAXIES.map((g) => ({ ...g })));
-  const [planets, setPlanets] = useState(() => PLANETS.map((p) => ({ ...p })));
+  const [galaxies, setGalaxies] = useState([]);
+  const [planets, setPlanets] = useState([]);
   const [filter, setFilter] = useState("all");
   const [form, setForm] = useState(null); // { kind: 'galaxy'|'planet', isNew, data }
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadData() {
+      setLoading(true);
+      setError("");
+      try {
+        const [galaxyData, planetData] = await Promise.all([
+          adminRequest("/galaxies", { signal: controller.signal }),
+          adminRequest("/planets", { signal: controller.signal }),
+        ]);
+        setGalaxies(Array.isArray(galaxyData) ? galaxyData : []);
+        setPlanets(Array.isArray(planetData) ? planetData : []);
+      } catch (err) {
+        if (err.name !== "AbortError") setError(err.message);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+
+    loadData();
+    return () => controller.abort();
+  }, []);
 
   const isGal = view === "galaxies";
   const countFor = (gid) => planets.filter((p) => p.galaxy === gid).length;
   const galById = (id) => galaxies.find((g) => g.id === id) || { name: "—", color: steel, en: "" };
 
   function openGalaxyForm(g) {
-    setForm({ kind: "galaxy", isNew: !g, data: g ? { ...g } : { id: uid(), name: "", en: "", desc: "", color: defaultGalaxyColor } });
+    setError("");
+    setForm({ kind: "galaxy", isNew: !g, data: g ? { ...g } : { id: "", name: "", en: "", desc: "", color: defaultGalaxyColor } });
   }
   function openPlanetForm(p) {
     const g0 = galaxies[0];
-    setForm({ kind: "planet", isNew: !p, data: p ? { ...p } : { id: uid(), name: "", en: "", galaxy: g0 ? g0.id : "", type: "prompt", coord: "", difficulty: 2, uses: 0, summary: "", body: "" } });
+    setError("");
+    setForm({ kind: "planet", isNew: !p, data: p ? { ...p } : { name: "", en: "", galaxy: g0 ? g0.id : "", type: "prompt", coord: "", difficulty: 2, uses: 0, summary: "", body: "" } });
   }
   function set(key, value) {
     setForm((f) => ({ ...f, data: { ...f.data, [key]: value } }));
   }
-  function save() {
+  async function save() {
     const d = form.data;
-    if (form.kind === "galaxy") {
-      setGalaxies((arr) => {
-        const i = arr.findIndex((x) => x.id === d.id);
-        const next = [...arr];
-        if (i >= 0) next[i] = d; else next.push(d);
-        return next;
-      });
-    } else {
-      const d2 = { ...d, difficulty: Number(d.difficulty) };
-      setPlanets((arr) => {
-        const i = arr.findIndex((x) => x.id === d2.id);
-        const next = [...arr];
-        if (i >= 0) next[i] = d2; else next.push(d2);
-        return next;
-      });
+    const requiredValues = form.kind === "galaxy"
+      ? [d.id, d.name, d.en, d.color, d.desc]
+      : [d.galaxy, d.type, d.name, d.en, d.coord, d.summary, d.body];
+
+    if (requiredValues.some((value) => typeof value !== "string" || !value.trim())) {
+      setError(form.kind === "galaxy" ? "請填寫完整的星系資料" : "欄位資料不完整");
+      return;
     }
-    setForm(null);
+
+    if (form.kind === "planet" && (!Number.isInteger(Number(d.uses)) || Number(d.uses) < 0)) {
+      setError("使用次數必須是 0 以上的整數");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      if (form.kind === "galaxy") {
+        const body = form.isNew
+          ? d
+          : { name: d.name, en: d.en, color: d.color, desc: d.desc };
+        const saved = await adminRequest(form.isNew ? "/galaxies" : `/galaxies/${encodeURIComponent(d.id)}`, {
+          method: form.isNew ? "POST" : "PATCH",
+          body: JSON.stringify(body),
+        });
+        setGalaxies((arr) => form.isNew ? [...arr, saved] : arr.map((g) => g.id === saved.id ? saved : g));
+      } else {
+        const body = {
+          galaxy: d.galaxy,
+          type: d.type,
+          name: d.name,
+          en: d.en,
+          coord: d.coord,
+          difficulty: Number(d.difficulty),
+          uses: Number(d.uses ?? 0),
+          summary: d.summary,
+          body: d.body,
+        };
+        const saved = await adminRequest(form.isNew ? "/planets" : `/planets/${encodeURIComponent(d.id)}`, {
+          method: form.isNew ? "POST" : "PATCH",
+          body: JSON.stringify(body),
+        });
+        setPlanets((arr) => form.isNew ? [...arr, saved] : arr.map((p) => p.id === saved.id ? saved : p));
+      }
+      setForm(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
   }
-  function delGalaxy(id) {
-    setGalaxies((arr) => arr.filter((g) => g.id !== id));
-    setPlanets((arr) => arr.filter((p) => p.galaxy !== id));
+  async function delGalaxy(id) {
+    if (!window.confirm("確定要刪除這個星系嗎？仍有行星時後端會拒絕刪除。")) return;
+    setError("");
+    try {
+      await adminRequest(`/galaxies/${encodeURIComponent(id)}`, { method: "DELETE" });
+      setGalaxies((arr) => arr.filter((g) => g.id !== id));
+      if (filter === id) setFilter("all");
+    } catch (err) {
+      setError(err.message);
+    }
   }
-  function delPlanet(id) {
-    setPlanets((arr) => arr.filter((p) => p.id !== id));
+  async function delPlanet(id) {
+    if (!window.confirm("確定要刪除這顆行星嗎？相關收藏也會一併刪除。")) return;
+    setError("");
+    try {
+      await adminRequest(`/planets/${encodeURIComponent(id)}`, { method: "DELETE" });
+      setPlanets((arr) => arr.filter((p) => p.id !== id));
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   const chips = [{ id: "all", label: "全部" }].concat(galaxies.map((g) => ({ id: g.id, label: g.name })));
@@ -113,7 +224,15 @@ export default function AdminConsole() {
             <button onClick={() => (isGal ? openGalaxyForm(null) : openPlanetForm(null))} style={{ height: 42, padding: "0 22px", background: "rgba(255,255,255,.06)", color: ink, border: `1px solid ${lineStrong}`, borderRadius: 2, fontFamily: "'Space Mono',monospace", fontWeight: 400, fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", cursor: "pointer" }}>+ {isGal ? "命名新星系" : "新增行星"}</button>
           </div>
 
-          {isGal ? (
+          {error && (
+            <div role="alert" style={{ marginBottom: 16, padding: "11px 14px", border: `1px solid ${danger}88`, color: danger, fontSize: 13 }}>
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div style={{ padding: 32, border: `1px solid ${line}`, color: inkDim, textAlign: "center", fontFamily: "'Space Mono',monospace", fontSize: 12 }}>同步資料中…</div>
+          ) : isGal ? (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 1, background: line }}>
               {galaxies.map((g) => (
                 <div
@@ -200,14 +319,16 @@ export default function AdminConsole() {
 
             {form.kind === "galaxy" ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                <div><label style={lblStyle}>星系名稱</label><input value={fd.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. 設計星系" style={inputStyle} /></div>
-                <div><label style={lblStyle}>英文代號</label><input value={fd.en} onChange={(e) => set("en", e.target.value)} placeholder="e.g. DESIGN SYSTEM" style={inputStyle} /></div>
-                <div><label style={lblStyle}>星系描述</label><textarea value={fd.desc} onChange={(e) => set("desc", e.target.value)} placeholder="這個類別收藏什麼？" style={{ ...inputStyle, height: 80, paddingTop: 10 }} /></div>
+                <div><label style={lblStyle}>星系 ID</label><input value={fd.id} onChange={(e) => set("id", e.target.value)} disabled={!form.isNew} required maxLength={50} placeholder="e.g. writing" style={{ ...inputStyle, opacity: form.isNew ? 1 : 0.55 }} /></div>
+                <div><label style={lblStyle}>星系名稱</label><input value={fd.name} onChange={(e) => set("name", e.target.value)} required maxLength={100} placeholder="e.g. 設計星系" style={inputStyle} /></div>
+                <div><label style={lblStyle}>英文代號</label><input value={fd.en} onChange={(e) => set("en", e.target.value)} required maxLength={150} placeholder="e.g. DESIGN SYSTEM" style={inputStyle} /></div>
+                <div><label style={lblStyle}>代表色</label><input type="color" value={fd.color} onChange={(e) => set("color", e.target.value.toUpperCase())} required style={{ ...inputStyle, padding: "6px 13px" }} /></div>
+                <div><label style={lblStyle}>星系描述</label><textarea value={fd.desc} onChange={(e) => set("desc", e.target.value)} required placeholder="這個類別收藏什麼？" style={{ ...inputStyle, height: 80, paddingTop: 10 }} /></div>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                <div><label style={lblStyle}>行星名稱</label><input value={fd.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. 摘要器" style={inputStyle} /></div>
-                <div><label style={lblStyle}>英文代號</label><input value={fd.en} onChange={(e) => set("en", e.target.value)} placeholder="e.g. Digest" style={inputStyle} /></div>
+                <div><label style={lblStyle}>行星名稱</label><input value={fd.name} onChange={(e) => set("name", e.target.value)} required maxLength={150} placeholder="e.g. 摘要器" style={inputStyle} /></div>
+                <div><label style={lblStyle}>英文代號</label><input value={fd.en} onChange={(e) => set("en", e.target.value)} required maxLength={150} placeholder="e.g. Digest" style={inputStyle} /></div>
                 <div>
                   <label style={lblStyle}>歸屬星系</label>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -230,17 +351,19 @@ export default function AdminConsole() {
                       <button onClick={() => set("type", "prompt")} style={{ ...typeTabBase, ...(fd.type === "prompt" ? { border: `1px solid ${lineStrong}`, background: "rgba(255,255,255,.06)", color: ink } : { border: `1px solid ${line}`, background: "transparent", color: inkFaint }) }}>prompt</button>
                     </div>
                   </div>
-                  <div style={{ width: 110 }}><label style={lblStyle}>座標</label><input value={fd.coord} onChange={(e) => set("coord", e.target.value)} placeholder="XX-000" style={inputStyle} /></div>
+                  <div style={{ width: 110 }}><label style={lblStyle}>座標</label><input value={fd.coord} onChange={(e) => set("coord", e.target.value)} required maxLength={30} placeholder="XX-000" style={inputStyle} /></div>
                 </div>
                 <div><label style={lblStyle}>難度 ({fd.difficulty}★)</label><input type="range" min="1" max="5" value={fd.difficulty} onChange={(e) => set("difficulty", Number(e.target.value))} style={{ width: "100%", accentColor: steel }} /></div>
-                <div><label style={lblStyle}>摘要</label><textarea value={fd.summary} onChange={(e) => set("summary", e.target.value)} placeholder="一句話說明這顆行星" style={{ ...inputStyle, height: 70, paddingTop: 10 }} /></div>
-                <div><label style={lblStyle}>內容 (prompt / skill 全文)</label><textarea value={fd.body} onChange={(e) => set("body", e.target.value)} placeholder="輸入完整內容…" style={{ ...inputStyle, height: 110, paddingTop: 10 }} /></div>
+                <div><label style={lblStyle}>使用次數</label><input type="number" min="0" step="1" value={fd.uses ?? 0} onChange={(e) => set("uses", Number(e.target.value))} style={inputStyle} /></div>
+                <div><label style={lblStyle}>摘要</label><textarea value={fd.summary} onChange={(e) => set("summary", e.target.value)} required placeholder="一句話說明這顆行星" style={{ ...inputStyle, height: 70, paddingTop: 10 }} /></div>
+                <div><label style={lblStyle}>內容 (prompt / skill 全文)</label><textarea value={fd.body} onChange={(e) => set("body", e.target.value)} required placeholder="輸入完整內容…" style={{ ...inputStyle, height: 110, paddingTop: 10 }} /></div>
               </div>
             )}
 
+            {error && <div role="alert" style={{ marginTop: 18, color: danger, fontSize: 13 }}>{error}</div>}
             <div style={{ display: "flex", gap: 12, marginTop: 28 }}>
-              <button onClick={save} style={{ flex: 1, height: 46, background: "rgba(255,255,255,.08)", color: ink, border: `1px solid ${lineStrong}`, borderRadius: 2, fontFamily: "'Space Mono',monospace", fontWeight: 400, fontSize: 12.5, letterSpacing: ".1em", textTransform: "uppercase", cursor: "pointer" }}>{form.isNew ? "✦ 創造" : "✓ 儲存變更"}</button>
-              <button onClick={() => setForm(null)} style={{ height: 46, padding: "0 22px", border: `1px solid ${line}`, background: "transparent", color: inkDim, borderRadius: 2, fontFamily: "'Space Mono',monospace", fontSize: 12.5, textTransform: "uppercase", cursor: "pointer" }}>取消</button>
+              <button disabled={saving} onClick={save} style={{ flex: 1, height: 46, background: "rgba(255,255,255,.08)", color: ink, border: `1px solid ${lineStrong}`, borderRadius: 2, fontFamily: "'Space Mono',monospace", fontWeight: 400, fontSize: 12.5, letterSpacing: ".1em", textTransform: "uppercase", cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "同步中…" : form.isNew ? "✦ 創造" : "✓ 儲存變更"}</button>
+              <button disabled={saving} onClick={() => setForm(null)} style={{ height: 46, padding: "0 22px", border: `1px solid ${line}`, background: "transparent", color: inkDim, borderRadius: 2, fontFamily: "'Space Mono',monospace", fontSize: 12.5, textTransform: "uppercase", cursor: saving ? "not-allowed" : "pointer" }}>取消</button>
             </div>
           </div>
         </>
