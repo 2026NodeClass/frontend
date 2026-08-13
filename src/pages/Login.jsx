@@ -27,15 +27,49 @@ export default function Login() {
   const [mode, setMode] = useState("login");
   const [role, setRole] = useState("member");
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const navigate = useNavigate();
   const { setIdentity } = useIdentity();
 
   const isRegister = mode === "register";
   const isCreator = role === "creator";
 
-  function submit() {
-    setIdentity({ name: (isRegister && name.trim()) || "林航", role });
-    navigate(isCreator ? "/admin" : "/explore");
+  async function submit() {
+    setErrorMsg("");
+    const endpoint = isRegister ? "/api/auth/register" : "/api/auth/login";
+    
+    // 註冊時才需要 name
+    const payload = isRegister ? { name, email, password } : { email, password };
+    
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        setErrorMsg(data.message || "發生錯誤");
+        return;
+      }
+
+      if (isRegister) {
+        // 註冊成功，切換回登入模式
+        setMode("login");
+        setErrorMsg("註冊成功！請登入。");
+      } else {
+        // 登入成功
+        const { token, user } = data.data;
+        // 將 token 與 user 一起存入 identity
+        setIdentity({ ...user, token });
+        navigate(user.role === "creator" ? "/admin" : "/explore");
+      }
+    } catch (err) {
+      setErrorMsg("網路錯誤，請稍後再試");
+    }
   }
 
   return (
@@ -66,9 +100,15 @@ export default function Login() {
           <p style={{ color: inkFaint, fontFamily: "'Space Mono',monospace", fontSize: 12, margin: "0 0 26px", letterSpacing: ".08em" }}>{isRegister ? "REGISTER NEW EXPLORER" : "AUTHENTICATE TO BOARD"}</p>
 
           <div style={{ display: "flex", gap: 4, padding: 4, border: `1px solid ${line}`, borderRadius: 2, marginBottom: 24 }}>
-            <button onClick={() => setMode("login")} style={isRegister ? idleTab : activeTab}>登入</button>
-            <button onClick={() => setMode("register")} style={isRegister ? activeTab : idleTab}>註冊</button>
+            <button onClick={() => { setMode("login"); setErrorMsg(""); }} style={isRegister ? idleTab : activeTab}>登入</button>
+            <button onClick={() => { setMode("register"); setErrorMsg(""); }} style={isRegister ? activeTab : idleTab}>註冊</button>
           </div>
+
+          {errorMsg && (
+            <div style={{ padding: 12, marginBottom: 16, border: `1px solid ${errorMsg.includes("成功") ? steel : "#b08585"}`, color: errorMsg.includes("成功") ? steel : "#b08585", fontSize: 13, borderRadius: 2 }}>
+              {errorMsg}
+            </div>
+          )}
 
           {isRegister && (
             <div style={{ marginBottom: 16 }}>
@@ -79,11 +119,11 @@ export default function Login() {
 
           <div style={{ marginBottom: 16 }}>
             <label style={labelStyle}>星際通訊 ID (Email)</label>
-            <input placeholder="explorer@stellar.io" style={inputStyle} />
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="explorer@stellar.io" style={inputStyle} />
           </div>
           <div style={{ marginBottom: 22 }}>
             <label style={labelStyle}>通行密語</label>
-            <input type="password" placeholder="••••••••" style={inputStyle} />
+            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••••" style={inputStyle} />
           </div>
 
           <div style={{ marginBottom: 24 }}>
