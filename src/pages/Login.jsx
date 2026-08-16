@@ -5,6 +5,10 @@ import CornerBrackets from "../components/CornerBrackets.jsx";
 import OrbViewport from "../components/OrbViewport.jsx";
 import { useIdentity } from "../hooks/useIdentity.js";
 
+const API_BASE = (
+  import.meta.env.VITE_API_URL ?? "http://localhost:3010/api"
+).replace(/\/$/, "");
+
 const ink = "#e7e8ea";
 const inkDim = "#8f929a";
 const inkFaint = "#54575e";
@@ -85,7 +89,7 @@ export default function Login() {
 
   async function submit() {
     setErrorMsg("");
-    const endpoint = isRegister ? "/api/auth/register" : "/api/auth/login";
+    const endpoint = isRegister ? "/auth/register" : "/auth/login";
 
     // 註冊時才需要 name
     const payload = isRegister
@@ -93,7 +97,7 @@ export default function Login() {
       : { email, password };
 
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch(`${API_BASE}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
