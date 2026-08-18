@@ -258,34 +258,10 @@ export default function Login() {
             {isRegister ? "REGISTER NEW EXPLORER" : "AUTHENTICATE TO BOARD"}
           </p>
 
-          <div
-            style={{
-              display: "flex",
-              gap: 4,
-              padding: 4,
-              border: `1px solid ${line}`,
-              borderRadius: 2,
-              marginBottom: 24,
-            }}
-          >
-            <button
-              onClick={() => {
-                setMode("login");
-                setErrorMsg("");
-              }}
-              style={isRegister ? idleTab : activeTab}
-            >
-              登入
-            </button>
-            <button
-              onClick={() => {
-                setMode("register");
-                setErrorMsg("");
-              }}
-              style={isRegister ? activeTab : idleTab}
-            >
-              註冊
-            </button>
+          <div style={{ display: "flex", gap: 4, padding: 4, border: `1px solid ${line}`, borderRadius: 2, marginBottom: 24 }}>
+            <button onClick={() => { setMode("login"); setErrorMsg(""); }} style={isRegister ? idleTab : activeTab}>登入</button>
+            <button onClick={() => navigate("/register")} style={isRegister ? activeTab : idleTab}>註冊</button>
+          </div>
           </div>
 
           {errorMsg && (

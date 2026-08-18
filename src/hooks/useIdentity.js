@@ -10,7 +10,7 @@ function load() {
   } catch {
     // ignore
   }
-  return DEFAULT_IDENTITY;
+  return null;
 }
 
 export function useIdentity() {
@@ -25,5 +25,9 @@ export function useIdentity() {
     }
   }, []);
 
-  return { identity, setIdentity };
+  const clearIdentity = useCallback(() => {
+    setIdentityState(null);
+    try { localStorage.removeItem(STORE_KEY); } catch {}
+  }, []);
+  return { identity, setIdentity, clearIdentity };
 }

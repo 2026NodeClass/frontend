@@ -315,7 +315,7 @@ export default function Explore() {
           <>
             <Link to="/galaxy" style={{ color: steel }}>◉ 3D 銀河</Link>
             <Link to="/voyage" style={{ color: inkDim }}>我的航線</Link>
-            <ExplorerBadge name={identity.name} />
+            <ExplorerBadge />
           </>
         )}
       />
