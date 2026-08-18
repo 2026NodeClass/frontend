@@ -14,8 +14,18 @@ const lineStrong = "rgba(235,236,239,.24)";
 const steel = "#9cadbd";
 const danger = "#b08585";
 
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 export default function VoyageMap() {
   const { identity } = useIdentity();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!identity || !identity.token) {
+      alert("請先登入後才能使用我的航線");
+      navigate("/login");
+    }
+  }, [identity, navigate]);
   const { favIds, removeFavorite } = useFavorites();
 
   const items = favIds.map((id) => PLANETS.find((p) => p.id === id)).filter(Boolean);
@@ -36,7 +46,7 @@ export default function VoyageMap() {
         right={(
           <>
             <Link to="/explore" style={{ color: inkDim }}>星圖</Link>
-            <ExplorerBadge name={identity.name} />
+            <ExplorerBadge />
           </>
         )}
       />

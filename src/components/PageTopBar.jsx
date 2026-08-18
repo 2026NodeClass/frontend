@@ -38,7 +38,19 @@ export default function PageTopBar({
   );
 }
 
-export function ExplorerBadge({ name }) {
+import { useNavigate } from "react-router-dom";
+import { useIdentity } from "../hooks/useIdentity.js";
+
+export function ExplorerBadge() {
+  const { identity, clearIdentity } = useIdentity();
+  const navigate = useNavigate();
+
+  if (!identity || !identity.token) {
+    return <Link to="/login" style={{ color: "#9cadbd", border: "1px solid rgba(235,236,239,.24)", padding: "4px 12px", borderRadius: 2, textDecoration: "none", fontSize: 12 }}>登入 / 註冊</Link>;
+  }
+
+  const name = identity.name || "Explorer";
+
   return (
     <>
       <span style={{ color: "#9cadbd" }}>探索家 · {name}</span>
@@ -51,6 +63,13 @@ export function ExplorerBadge({ name }) {
       >
         {name.slice(0, 1)}
       </span>
+      <button 
+        onClick={() => { clearIdentity(); navigate("/login"); }}
+        style={{ background: "transparent", border: "1px solid rgba(235,236,239,.24)", color: "#8f929a", padding: "4px 10px", borderRadius: "2px", cursor: "pointer", fontFamily: "'Noto Sans TC',sans-serif", fontSize: 12, marginLeft: "8px" }}
+      >
+        登出
+      </button>
     </>
   );
 }
+

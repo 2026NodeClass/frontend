@@ -23,8 +23,8 @@ const roleIdle = { ...roleBase, border: `1px solid ${line}`, color: inkFaint };
 const inputStyle = { width: "100%", height: 46, background: "rgba(255,255,255,.03)", border: `1px solid ${line}`, borderRadius: 2, color: ink, padding: "0 14px", fontSize: 14, outline: "none", fontFamily: "'Noto Sans TC',sans-serif" };
 const labelStyle = { display: "block", fontFamily: "'Space Mono',monospace", fontSize: 11, color: inkDim, letterSpacing: ".14em", textTransform: "uppercase", marginBottom: 8 };
 
-export default function Login() {
-  const [mode, setMode] = useState("login");
+export default function Register() {
+  const [mode, setMode] = useState("register");
   const [role, setRole] = useState("member");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -58,8 +58,8 @@ export default function Login() {
 
       if (isRegister) {
         // 註冊成功，切換回登入模式
-        setMode("login");
-        setErrorMsg("註冊成功！請登入。");
+        alert("註冊成功！請登入。");
+        navigate("/login");
       } else {
         // 登入成功
         const { token, user } = data.data;
@@ -100,8 +100,8 @@ export default function Login() {
           <p style={{ color: inkFaint, fontFamily: "'Space Mono',monospace", fontSize: 12, margin: "0 0 26px", letterSpacing: ".08em" }}>{isRegister ? "REGISTER NEW EXPLORER" : "AUTHENTICATE TO BOARD"}</p>
 
           <div style={{ display: "flex", gap: 4, padding: 4, border: `1px solid ${line}`, borderRadius: 2, marginBottom: 24 }}>
-            <button onClick={() => { setMode("login"); setErrorMsg(""); }} style={isRegister ? idleTab : activeTab}>登入</button>
-            <button onClick={() => navigate("/register")} style={isRegister ? activeTab : idleTab}>註冊</button>
+            <button onClick={() => navigate("/login")} style={isRegister ? idleTab : activeTab}>登入</button>
+            <button onClick={() => { setMode("register"); setErrorMsg(""); }} style={isRegister ? activeTab : idleTab}>註冊</button>
           </div>
 
           {errorMsg && (
