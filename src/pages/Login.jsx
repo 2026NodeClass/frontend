@@ -99,9 +99,40 @@ export default function Login() {
           <h1 style={{ fontFamily: "'Chakra Petch',sans-serif", color: ink, fontSize: 26, margin: "14px 0 4px", fontWeight: 600 }}>{isRegister ? "登記新的探索家" : "歡迎回到艦橋"}</h1>
           <p style={{ color: inkFaint, fontFamily: "'Space Mono',monospace", fontSize: 12, margin: "0 0 26px", letterSpacing: ".08em" }}>{isRegister ? "REGISTER NEW EXPLORER" : "AUTHENTICATE TO BOARD"}</p>
 
+<<<<<<< HEAD
           <div style={{ display: "flex", gap: 4, padding: 4, border: `1px solid ${line}`, borderRadius: 2, marginBottom: 24 }}>
             <button onClick={() => { setMode("login"); setErrorMsg(""); }} style={isRegister ? idleTab : activeTab}>登入</button>
             <button onClick={() => { setMode("register"); setErrorMsg(""); }} style={isRegister ? activeTab : idleTab}>註冊</button>
+=======
+          <div
+            style={{
+              display: "flex",
+              gap: 4,
+              padding: 4,
+              border: `1px solid ${line}`,
+              borderRadius: 2,
+              marginBottom: 24,
+            }}
+          >
+            <button
+              onClick={() => {
+                setMode("login");
+                setErrorMsg("");
+              }}
+              style={isRegister ? idleTab : activeTab}
+            >
+              登入
+            </button>
+            <button
+              onClick={() => {
+                setMode("register");
+                setErrorMsg("");
+              }}
+              style={isRegister ? activeTab : idleTab}
+            >
+              註冊
+            </button>
+>>>>>>> parent of 08e746e (增加登出按鈕)
           </div>
 
           {errorMsg && (
