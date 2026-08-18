@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { GALAXIES, PLANETS, diffStars, withAlpha } from "../data.js";
+import { diffStars, withAlpha } from "../data.js";
+import { getCatalog } from "../api/catalog.js";
 import PageTopBar, { ExplorerBadge } from "../components/PageTopBar.jsx";
 import { setGlowColor, resetGlowColor } from "../components/CursorGlow.jsx";
 import { useIdentity } from "../hooks/useIdentity.js";
@@ -11,11 +12,6 @@ const inkFaint = "#54575e";
 const line = "rgba(235,236,239,.10)";
 const lineStrong = "rgba(235,236,239,.24)";
 const steel = "#9cadbd";
-
-const PLANET_COUNTS = PLANETS.reduce((acc, p) => {
-  acc[p.galaxy] = (acc[p.galaxy] || 0) + 1;
-  return acc;
-}, {});
 
 const rowBase = { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 11px", borderRadius: 2, cursor: "pointer", transition: "all .15s", fontFamily: "'Noto Sans TC',sans-serif", border: "none", textAlign: "left" };
 const typeBase = { flex: 1, height: 34, borderRadius: 2, cursor: "pointer", fontFamily: "'Space Mono',monospace", fontSize: 12, letterSpacing: ".06em", textTransform: "uppercase", transition: "all .15s" };
@@ -29,11 +25,32 @@ export default function Explore() {
   const [types, setTypes] = useState({ skill: true, prompt: true });
   const [sel, setSel] = useState(null);
   const [visibleCount, setVisibleCount] = useState(0);
+  const [galaxies, setGalaxies] = useState([]);
+  const [planets, setPlanets] = useState([]);
+  const [catalogError, setCatalogError] = useState("");
 
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const filterRef = useRef({ query, off, types });
   const resetViewRef = useRef(() => {});
+
+  const planetCounts = useMemo(() => planets.reduce((acc, planet) => {
+    acc[planet.galaxy] = (acc[planet.galaxy] || 0) + 1;
+    return acc;
+  }, {}), [planets]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getCatalog(controller.signal)
+      .then(({ galaxies: nextGalaxies, planets: nextPlanets }) => {
+        setGalaxies(nextGalaxies);
+        setPlanets(nextPlanets);
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") setCatalogError("無法載入星系與行星資料。");
+      });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     filterRef.current = { query, off, types };
@@ -41,16 +58,16 @@ export default function Explore() {
 
   useEffect(() => {
     const g = searchParams.get("g");
-    if (g && GALAXIES.some((x) => x.id === g)) {
+    if (g && galaxies.some((x) => x.id === g)) {
       const initOff = {};
-      GALAXIES.forEach((x) => {
+      galaxies.forEach((x) => {
         if (x.id !== g) initOff[x.id] = true;
       });
       setOff(initOff);
     }
     // only apply the initial deep-link filter once
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [galaxies, searchParams]);
 
   useEffect(() => {
     const cv = canvasRef.current;
@@ -59,20 +76,21 @@ export default function Explore() {
     let W = 0, H = 0;
 
     const nodes = [];
-    GALAXIES.forEach((gx, i) => {
-      const a = (i / GALAXIES.length) * Math.PI * 2;
+    galaxies.forEach((gx, i) => {
+      const a = (i / galaxies.length) * Math.PI * 2;
       nodes.push({ id: gx.id, kind: "galaxy", name: gx.name, color: gx.color, x: Math.cos(a) * 160, y: Math.sin(a) * 160, vx: 0, vy: 0, r: 20, mass: 6 });
     });
-    PLANETS.forEach((p) => {
+    planets.forEach((p) => {
       const hub = nodes.find((n) => n.id === p.galaxy);
+      if (!hub) return;
       nodes.push({
-        id: p.id, kind: "planet", name: p.name, color: GALAXIES.find((g) => g.id === p.galaxy).color,
+        id: p.id, kind: "planet", name: p.name, color: galaxies.find((g) => g.id === p.galaxy)?.color ?? steel,
         galaxy: p.galaxy, type: p.type, data: p,
         x: hub.x + (Math.random() - 0.5) * 140, y: hub.y + (Math.random() - 0.5) * 140, vx: 0, vy: 0,
         r: 8 + Math.min(6, p.uses / 300), mass: 1.4,
       });
     });
-    const edges = PLANETS.map((p) => ({ a: p.galaxy, b: p.id }));
+    const edges = planets.map((p) => ({ a: p.galaxy, b: p.id }));
     const nodeById = {};
     nodes.forEach((n) => (nodeById[n.id] = n));
 
@@ -262,12 +280,12 @@ export default function Explore() {
       cv.removeEventListener("mousedown", onMouseDown);
       cv.removeEventListener("wheel", onWheel);
     };
-  }, []);
+  }, [galaxies, planets]);
 
-  const galaxyRows = GALAXIES.map((g) => {
+  const galaxyRows = galaxies.map((g) => {
     const on = !off[g.id];
     return {
-      id: g.id, name: g.name, color: g.color, count: PLANET_COUNTS[g.id] || 0,
+      id: g.id, name: g.name, color: g.color, count: planetCounts[g.id] || 0,
       style: {
         ...rowBase,
         ...(on
@@ -276,6 +294,7 @@ export default function Explore() {
       },
     };
   });
+  const selectedGalaxy = sel ? galaxies.find((g) => g.id === sel.galaxy) : null;
 
   function toggleGalaxy(id) {
     setOff((cur) => {
@@ -343,9 +362,14 @@ export default function Explore() {
         {/* CENTER graph */}
         <div ref={wrapRef} style={{ position: "relative", overflow: "hidden", background: "radial-gradient(900px 700px at 50% 45%,#101113 0%,#0a0b0c 60%,#07080a 100%)" }}>
           <canvas ref={canvasRef} style={{ display: "block", cursor: "grab" }} />
+          {catalogError && (
+            <div style={{ position: "absolute", top: 42, left: 16, color: "#e0a0a0", fontSize: 12 }}>
+              {catalogError}
+            </div>
+          )}
           <div style={{ position: "absolute", top: 16, left: 16, fontFamily: "'Space Mono',monospace", fontSize: 11, color: inkFaint, pointerEvents: "none" }}>NODES: {visibleCount} · GRAPH VIEW</div>
           <div style={{ position: "absolute", bottom: 16, left: 16, display: "flex", gap: 16, fontFamily: "'Space Mono',monospace", fontSize: 11, color: inkDim, pointerEvents: "none" }}>
-            {GALAXIES.map((g) => (
+            {galaxies.map((g) => (
               <span key={g.id}><span style={{ color: g.color }}>●</span> {g.name.replace("星系", "")}</span>
             ))}
           </div>
@@ -356,9 +380,9 @@ export default function Explore() {
           {sel ? (
             <div>
               <div style={{ fontFamily: "'Space Mono',monospace", fontSize: 11, color: inkFaint, letterSpacing: ".14em", marginBottom: 14, textTransform: "uppercase" }}>{sel.coord} · {sel.type.toUpperCase()}</div>
-              <div style={{ width: 60, height: 60, border: `1px solid ${lineStrong}`, background: `radial-gradient(circle at 34% 30%, #f5f3fa, ${GALAXIES.find((g) => g.id === sel.galaxy).color} 60%)`, marginBottom: 16 }} />
+              <div style={{ width: 60, height: 60, border: `1px solid ${lineStrong}`, background: `radial-gradient(circle at 34% 30%, #f5f3fa, ${selectedGalaxy?.color ?? steel} 60%)`, marginBottom: 16 }} />
               <h2 style={{ fontFamily: "'Chakra Petch',sans-serif", color: ink, fontSize: 20, margin: "0 0 2px" }}>{sel.name}</h2>
-              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: 11, color: GALAXIES.find((g) => g.id === sel.galaxy).color, letterSpacing: ".08em", marginBottom: 16 }}>{sel.en}</div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: 11, color: selectedGalaxy?.color ?? steel, letterSpacing: ".08em", marginBottom: 16 }}>{sel.en}</div>
               <p style={{ color: inkDim, fontSize: 13.5, lineHeight: 1.8, margin: "0 0 18px" }}>{sel.summary}</p>
               <div style={{ display: "flex", gap: 1, marginBottom: 8, background: line }}>
                 <div style={{ flex: 1, padding: 10, background: "#08090a" }}>
