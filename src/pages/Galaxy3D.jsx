@@ -127,13 +127,12 @@ export default function Galaxy3D() {
     sfGeo.setAttribute("position", new THREE.BufferAttribute(sfp, 3));
     scene.add(new THREE.Points(sfGeo, new THREE.PointsMaterial({ size: 1.6, map: sprite, color: 0xc7c9cd, transparent: true, depthWrite: false, opacity: 0.55 })));
 
-    // galaxy category markers
+    // galaxy category markers — laid out evenly around the disc so any number of galaxies fits
     const markers = [];
-    const layout = [{ id: "words", r: 150, ang: 0.6 }, { id: "code", r: 200, ang: 2.7 }, { id: "market", r: 120, ang: 4.6 }];
-    layout.forEach((l) => {
-      const g = GALAXIES.find((x) => x.id === l.id);
-      if (!g) return;
-      const x = Math.cos(l.ang) * l.r, z = Math.sin(l.ang) * l.r, y = 8;
+    GALAXIES.forEach((g, i) => {
+      const r = 130 + (i % 3) * 35;
+      const ang = (i / GALAXIES.length) * Math.PI * 2 + 0.4;
+      const x = Math.cos(ang) * r, z = Math.sin(ang) * r, y = 8;
 
       const smat = new THREE.SpriteMaterial({ map: sprite, color: g.color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.85 });
       const sp = new THREE.Sprite(smat);
