@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { diffStars, withAlpha } from "../data.js";
 import { getCatalog, getPlanet } from "../api/catalog.js";
 import PageTopBar from "../components/PageTopBar.jsx";
@@ -18,8 +18,9 @@ const steel = "#9cadbd";
 
 export default function PlanetDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { identity } = useIdentity();
-  const { isFavorite, toggleFavorite } = useFavorites();
+  const { isFavorite, toggleFavorite } = useFavorites(identity?.token);
   const [copied, setCopied] = useState(false);
   const [planet, setPlanet] = useState(null);
   const [galaxy, setGalaxy] = useState(null);
@@ -66,6 +67,15 @@ export default function PlanetDetail() {
   const g = galaxy;
 
   const isFav = isFavorite(p.id);
+
+  function handleToggleFavorite() {
+    if (!identity?.token) {
+      alert("請先登入後才能收藏");
+      navigate("/login");
+      return;
+    }
+    toggleFavorite(p.id);
+  }
 
   function copy() {
     try { navigator.clipboard.writeText(p.body); } catch { /* clipboard unavailable */ }
@@ -153,7 +163,7 @@ export default function PlanetDetail() {
           </div>
 
           <div style={{ display: "flex", gap: 12, marginTop: 26 }}>
-            <button onClick={() => toggleFavorite(p.id)} style={favBtnStyle}>{isFav ? "✓ 已收藏至航點" : "✦ 收藏至航點"}</button>
+            <button onClick={handleToggleFavorite} style={favBtnStyle}>{isFav ? "✓ 已收藏至航點" : "✦ 收藏至航點"}</button>
             <Link to="/explore" style={{ height: 48, display: "inline-flex", alignItems: "center", padding: "0 26px", border: `1px solid ${line}`, color: inkDim, borderRadius: 2, fontFamily: "'Space Mono',monospace", fontSize: 12.5, letterSpacing: ".08em", textTransform: "uppercase" }}>◂ 回星圖</Link>
           </div>
 

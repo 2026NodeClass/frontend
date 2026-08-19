@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { GALAXIES, PLANETS, diffStars, withAlpha } from "../data.js";
+import { GALAXIES, diffStars, withAlpha } from "../data.js";
 import PageTopBar, { ExplorerBadge } from "../components/PageTopBar.jsx";
 import Starfield from "../components/Starfield.jsx";
 import { setGlowColor, resetGlowColor } from "../components/CursorGlow.jsx";
@@ -26,9 +26,9 @@ export default function VoyageMap() {
       navigate("/login");
     }
   }, [identity, navigate]);
-  const { favIds, removeFavorite } = useFavorites();
+  const { favorites, removeFavorite } = useFavorites(identity?.token);
 
-  const items = favIds.map((id) => PLANETS.find((p) => p.id === id)).filter(Boolean);
+  const items = favorites;
   const isEmpty = items.length === 0;
 
   const galSet = new Set(items.map((p) => p.galaxy));
