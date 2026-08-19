@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { GALAXIES, PLANETS, withAlpha } from "../data.js";
+import { withAlpha } from "../data.js";
+import { getCatalog } from "../api/catalog.js";
 import { setGlowColor, resetGlowColor } from "../components/CursorGlow.jsx";
 
 const ink = "#e7e8ea";
@@ -11,11 +12,6 @@ const inkFaint = "#54575e";
 const line = "rgba(235,236,239,.10)";
 const lineStrong = "rgba(235,236,239,.22)";
 const steel = "#9cadbd";
-
-const PLANET_COUNTS = PLANETS.reduce((acc, p) => {
-  acc[p.galaxy] = (acc[p.galaxy] || 0) + 1;
-  return acc;
-}, {});
 
 function discTexture() {
   const c = document.createElement("canvas");
@@ -35,8 +31,27 @@ function discTexture() {
 export default function Galaxy3D() {
   const stageRef = useRef(null);
   const labelsRef = useRef(null);
+  const [catalog, setCatalog] = useState(null);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
+    const controller = new AbortController();
+    getCatalog(controller.signal)
+      .then(setCatalog)
+      .catch((error) => {
+        if (error.name !== "AbortError") setLoadError("無法載入銀河資料。");
+      });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!catalog) return undefined;
+    const { galaxies: GALAXIES, planets: PLANETS } = catalog;
+    const PLANET_COUNTS = PLANETS.reduce((acc, p) => {
+      acc[p.galaxy] = (acc[p.galaxy] || 0) + 1;
+      return acc;
+    }, {});
+
     const stage = stageRef.current;
     const labelBox = labelsRef.current;
     let W = stage.clientWidth, H = stage.clientHeight;
@@ -117,6 +132,7 @@ export default function Galaxy3D() {
     const layout = [{ id: "words", r: 150, ang: 0.6 }, { id: "code", r: 200, ang: 2.7 }, { id: "market", r: 120, ang: 4.6 }];
     layout.forEach((l) => {
       const g = GALAXIES.find((x) => x.id === l.id);
+      if (!g) return;
       const x = Math.cos(l.ang) * l.r, z = Math.sin(l.ang) * l.r, y = 8;
 
       const smat = new THREE.SpriteMaterial({ map: sprite, color: g.color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.85 });
@@ -172,7 +188,7 @@ export default function Galaxy3D() {
       markers.forEach((m) => m.el.remove());
       if (renderer.domElement.parentElement) renderer.domElement.parentElement.removeChild(renderer.domElement);
     };
-  }, []);
+  }, [catalog]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100vh", background: "radial-gradient(1200px 900px at 50% 50%,#0d0e10 0%,#07080a 60%,#050506 100%)", fontFamily: "'Noto Sans TC',sans-serif", overflow: "hidden" }}>
@@ -194,7 +210,7 @@ export default function Galaxy3D() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 20, fontFamily: "'Space Mono',monospace", fontSize: 12, color: inkDim }}>
           <Link to="/explore" style={{ color: steel }}>▦ 星圖圖譜</Link>
-          <span>3 GALAXIES · 14 PLANETS</span>
+          <span>{catalog ? `${catalog.galaxies.length} GALAXIES · ${catalog.planets.length} PLANETS` : "…"}</span>
         </div>
       </div>
 
@@ -210,9 +226,16 @@ export default function Galaxy3D() {
         <div style={{ color: inkFaint }}>AUTO-ROTATE ENABLED · DRAG TO OVERRIDE</div>
       </div>
 
+      {loadError && (
+        <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: inkDim, fontFamily: "'Space Mono',monospace", fontSize: 13 }}>{loadError}</div>
+      )}
+      {!catalog && !loadError && (
+        <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: inkDim, fontFamily: "'Space Mono',monospace", fontSize: 13 }}>載入銀河資料中…</div>
+      )}
+
       {/* legend */}
       <div style={{ position: "absolute", bottom: 34, right: 36, display: "flex", flexDirection: "column", gap: 10, fontFamily: "'Chakra Petch',sans-serif", fontSize: 13 }}>
-        {GALAXIES.map((g) => (
+        {(catalog?.galaxies ?? []).map((g) => (
           <div
             key={g.id}
             onMouseEnter={() => setGlowColor(withAlpha(g.color, 0.24))}
