@@ -4,7 +4,6 @@ import { diffStars, withAlpha } from "../data.js";
 import { getCatalog } from "../api/catalog.js";
 import PageTopBar, { ExplorerBadge } from "../components/PageTopBar.jsx";
 import { setGlowColor, resetGlowColor } from "../components/CursorGlow.jsx";
-import { useIdentity } from "../hooks/useIdentity.js";
 
 const ink = "#e7e8ea";
 const inkDim = "#8f929a";
@@ -18,7 +17,6 @@ const typeBase = { flex: 1, height: 34, borderRadius: 2, cursor: "pointer", font
 
 export default function Explore() {
   const [searchParams] = useSearchParams();
-  const { identity } = useIdentity();
 
   const [query, setQuery] = useState("");
   const [off, setOff] = useState({});

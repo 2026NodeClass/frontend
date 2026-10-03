@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 
 const STORE_KEY = "stellar_identity";
-const DEFAULT_IDENTITY = { name: "林航", role: "member" };
 
 function load() {
   try {
