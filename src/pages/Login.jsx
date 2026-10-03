@@ -104,7 +104,7 @@ export default function Login() {
       const { token, user } = data.data;
       setIdentity({ ...user, token });
       navigate(user.role === "admin" ? "/admin" : "/explore");
-    } catch (err) {
+    } catch {
       setErrorMsg("網路錯誤，請稍後再試");
     }
   }

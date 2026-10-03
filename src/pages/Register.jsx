@@ -82,7 +82,7 @@ export default function Register() {
 
       alert("註冊成功！請登入。");
       navigate("/login");
-    } catch (err) {
+    } catch {
       setErrorMsg("網路錯誤，請稍後再試");
     }
   }
